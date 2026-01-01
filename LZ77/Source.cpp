@@ -24,95 +24,136 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 		unsigned char flagBajt{};
 		ofile.put(flagBajt);		//place holder
 		int bit_count{};
+		long long cursor1 = 0;
 
-		for (long long cursor1 = 0; cursor1 < size; cursor1++)
+		while(cursor1 < size)
 		{
-			unsigned short dystans{};
-			unsigned char dlugosc{};
-			unsigned short max{};
-			if (bit_count == 8)
+			std::vector<Token> tokenList;
+			for (int i = 0; i < 2; i++)		//szukanie najlepszego dopasowania 2-znaki do przodu
 			{
-				long long temp_pos = ofile.tellp();
-				ofile.seekp(pos);
-				ofile.put(flagBajt);
-				ofile.seekp(temp_pos);
-				pos = temp_pos;
-				flagBajt = 0;
-				bit_count = 0;
-				ofile.put(flagBajt);	//place holder
-			}
-			unsigned short window = std::numeric_limits<unsigned short>::max();
-
-			//petla for z przesuwanym oknem
-
-			for (long long cursor2 = (cursor1<window) ? 0 : cursor1-window ; cursor2 < cursor1; cursor2++)
-			{
-				unsigned short count{};
-				if(fullText[cursor2] == fullText[cursor1])
+				if (cursor1 + i < size)
 				{
-					int temp_cursor1 = cursor1;
-					int temp_cursor2 = cursor2;
-					while (fullText[temp_cursor1++] == fullText[temp_cursor2++] && temp_cursor2<cursor1-1)
-						count++;
-					if(count > max)
-					{
-						if (count > 255)
-							count = 255;
-						max = count;
-						dlugosc = max;
-						dystans = cursor1 - cursor2;
-					}
+					tokenList.push_back(bestMatchFinder(cursor1 + i, fullText));
 				}
 			}
-			if (max<3)
+			unsigned char max_dlugosc{};
+			int tokenIndex{};
+			for(int i=0;i<tokenList.size();i++)		//szukam najdluzszego tokenu
 			{
-				flagBajt <<= 1;
-				bit_count++;
-				ofile.put(fullText[cursor1]);
+				if (tokenList[i].dlugosc > max_dlugosc)
+				{
+					max_dlugosc = tokenList[i].dlugosc;
+					tokenIndex = i;
+				}
 			}
-			else if(max>=3)
+			if(tokenIndex==0)
 			{
-				flagBajt <<= 1;
-				flagBajt |= 1;
-				bit_count++;
-				cursor1 += dlugosc-1;
-				ofile.write(reinterpret_cast<const char*>(&dystans), sizeof(dystans));
-				ofile.write(reinterpret_cast<const char*>(&dlugosc), sizeof(dlugosc));
-				max = 0;
+				if (max_dlugosc < 3)
+					literalFlagUpdate(ofile, fullText, flagBajt, bit_count, cursor1,pos);
+				else if (max_dlugosc >= 3)
+					tokenFlagUpdate(ofile, flagBajt, bit_count, 0, tokenList, cursor1, max_dlugosc,pos);
+			}
+			else if (tokenIndex > 0)
+			{
+				for (int i = 0; i <= tokenIndex; i++)	//obsluguje tylko i=0 oraz i=1, wiec petla wydaje sie nie potrzebna,
+				{										// ale na wypadek gdybym w przyszlosci chcial oblugiwac wieksza 
+					if (i<tokenIndex)					//glebokosc iteracji zostawiam to w formie petli
+						literalFlagUpdate(ofile, fullText, flagBajt, bit_count, cursor1,pos);
+					else if (i == tokenIndex && max_dlugosc < 3)
+						literalFlagUpdate(ofile, fullText, flagBajt, bit_count, cursor1,pos);
+					else if (i == tokenIndex && max_dlugosc >= 3)
+						tokenFlagUpdate(ofile, flagBajt, bit_count, i, tokenList, cursor1, max_dlugosc,pos);
+				}
 			}
 		}
-		if (bit_count == 8)
-		{
-			long long temp_pos = ofile.tellp();
-			ofile.seekp(pos);
-			ofile.put(flagBajt);
-			ofile.seekp(temp_pos);
-			pos = temp_pos;
-			flagBajt = 0;
-			bit_count = 0;
-			ofile.put(flagBajt);
-		}
-		if (bit_count < 8)		//warunek zakonczenia programu
-		{
-			flagBajt <<= 1;
-			flagBajt |= 1;
-			bit_count++;
-			flagBajt <<= 8 - bit_count;
-			long long temp_pos;
-			temp_pos = ofile.tellp();
-			ofile.seekp(pos);
-			ofile.put(flagBajt);
-			ofile.seekp(temp_pos);
-			unsigned short dystans{};
-			unsigned char dlugosc{};
-			ofile.write(reinterpret_cast<const char*>(&dystans), sizeof(dystans));
-			ofile.write(reinterpret_cast<const char*>(&dlugosc), sizeof(dlugosc));
-		}
+		flagBajt <<= 1;
+		flagBajt |= 1;
+		bit_count++;
+		flagBajt <<= 8 - bit_count;
+		long long temp_pos;
+		temp_pos = ofile.tellp();
+		ofile.seekp(pos);
+		ofile.put(flagBajt);
+		ofile.seekp(temp_pos);
+		unsigned short dystans{};
+		unsigned char dlugosc{};
+		ofile.write(reinterpret_cast<const char*>(&dystans), sizeof(dystans));
+		ofile.write(reinterpret_cast<const char*>(&dlugosc), sizeof(dlugosc));
 	}
 	else
 	{
 		std::cout << "Blad odczytu pliku przy kodowaniu" << std::endl;
 	}
+}
+
+void literalFlagUpdate
+(std::ofstream& ofile,const std::string& fullText,
+	unsigned char& flagBajt, int& bit_count, long long& cursor1, long long& pos)
+{
+	flagBajt <<= 1;
+	bit_count++;
+	ofile.put(fullText[cursor1++]);
+	flagSwap(ofile, pos, flagBajt, bit_count);
+}
+
+void tokenFlagUpdate
+(std::ofstream& ofile, unsigned char& flagBajt, int& bit_count, int i,
+	const std::vector<Token>& tokenList, long long& cursor1, unsigned char max_dlugosc, long long& pos)
+{
+	flagBajt <<= 1;
+	flagBajt |= 1;
+	bit_count++;
+	cursor1 += max_dlugosc;
+	ofile.write(reinterpret_cast<const char*>(&tokenList[i].dystans), sizeof(tokenList[i].dystans));
+	ofile.write(reinterpret_cast<const char*>(&tokenList[i].dlugosc), sizeof(tokenList[i].dlugosc));
+	flagSwap(ofile, pos, flagBajt, bit_count);
+}
+
+void flagSwap(std::ofstream& ofile, long long& pos, unsigned char& flagBajt, int& bit_count)
+{
+	if (bit_count == 8)
+	{
+		long long temp_pos = ofile.tellp();
+		ofile.seekp(pos);
+		ofile.put(flagBajt);
+		ofile.seekp(temp_pos);
+		pos = temp_pos;
+		flagBajt = 0;
+		bit_count = 0;
+		ofile.put(flagBajt);	//place holder
+	}
+}
+
+Token bestMatchFinder
+(long long cursor1, const std::string& fullText)
+{
+	unsigned short dystans{};
+	unsigned char dlugosc{};
+	int max{};
+	unsigned short window = std::numeric_limits<unsigned short>::max();
+
+	//petla for() z przesuwanym oknem
+	for (long long cursor2 = (cursor1 < window) ? 0 : cursor1 - window; cursor2 < cursor1; cursor2++)
+	{
+		unsigned short count{};
+		if (fullText[cursor2] == fullText[cursor1])
+		{
+			int temp_cursor1 = cursor1;
+			int temp_cursor2 = cursor2;
+			while (temp_cursor2 < cursor1 && fullText[temp_cursor1++] == fullText[temp_cursor2++])
+				count++;
+			if (count > max)
+			{
+				if (count > 255)
+					count = 255;
+				max = count;
+				dlugosc = max;
+				dystans = cursor1 - cursor2;
+			}
+		}
+	}
+	Token token(cursor1, dystans, dlugosc);
+	return token;
 }
 
 void AlgorytmDekodujacyLZ77(const std::string& ipath, const std::string& opath)
@@ -160,6 +201,7 @@ void AlgorytmDekodujacyLZ77(const std::string& ipath, const std::string& opath)
 
 				if (dystans == 0 && dlugosc == 0)		//warunek zakonczenia programu
 					break;
+
 				if (dystans > dekoded.size())
 				{
 					std::cout << "Blad odczytu danych" << std::endl;
