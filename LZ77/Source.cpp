@@ -77,11 +77,28 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 				max = 0;
 			}
 		}
-		if (bit_count != 8)		//warunek zakonczenia programu
+		if (bit_count == 8)
+		{
+			long long temp_pos = ofile.tellp();
+			ofile.seekp(pos);
+			ofile.put(flagBajt);
+			ofile.seekp(temp_pos);
+			pos = temp_pos;
+			flagBajt = 0;
+			bit_count = 0;
+			ofile.put(flagBajt);
+		}
+		if (bit_count < 8)		//warunek zakonczenia programu
 		{
 			flagBajt <<= 1;
-			flagBajt |= 128;
+			flagBajt |= 1;
+			bit_count++;
+			flagBajt <<= 8 - bit_count;
+			long long temp_pos;
+			temp_pos = ofile.tellp();
+			ofile.seekp(pos);
 			ofile.put(flagBajt);
+			ofile.seekp(temp_pos);
 			unsigned short dystans{};
 			unsigned char dlugosc{};
 			ofile.write(reinterpret_cast<const char*>(&dystans), sizeof(dystans));
