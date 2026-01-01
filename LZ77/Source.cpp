@@ -25,7 +25,7 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 		ofile.put(flagBajt);		//place holder
 		int bit_count{};
 
-		for (int cursor1 = 0; cursor1 < size; cursor1++)
+		for (long long cursor1 = 0; cursor1 < size; cursor1++)
 		{
 			unsigned short dystans{};
 			unsigned char dlugosc{};
@@ -41,7 +41,11 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 				bit_count = 0;
 				ofile.put(flagBajt);	//place holder
 			}
-			for (int cursor2 = 0; cursor2 < cursor1; cursor2++)
+			unsigned short window = std::numeric_limits<unsigned short>::max();
+
+			//petla for z przesuwanym oknem
+
+			for (long long cursor2 = (cursor1<window) ? 0 : cursor1-window ; cursor2 < cursor1; cursor2++)
 			{
 				unsigned short count{};
 				if(fullText[cursor2] == fullText[cursor1])
