@@ -20,20 +20,24 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 		fullText.resize(size);
 		ifile.read(&fullText[0], size);
 
-		long long pos = ofile.tellp();
+
+		std::vector<unsigned long long> head(std::numeric_limits<unsigned short>::max(), -1);
+		std::vector<unsigned long long> prev(size, -1);
+
+		unsigned long long pos = ofile.tellp();
 		unsigned char flagBajt{};
 		ofile.put(flagBajt);		//place holder
 		int bit_count{};
-		long long cursor1 = 0;
+		unsigned long long cursor1 = 0;
 
 		while(cursor1 < size)
 		{
 			std::vector<Token> tokenList;
-			for (int i = 0; i < 2; i++)		//szukanie najlepszego dopasowania 2-znaki do przodu
+			for (int i = 0; i < 1; i++)		//szukanie najlepszego dopasowania 2-znaki do przodu
 			{
 				if (cursor1 + i < size)
 				{
-					tokenList.push_back(bestMatchFinder(cursor1 + i, fullText));
+				tokenList.push_back(bestHashFinder(cursor1  + i, fullText,head,prev));
 				}
 			}
 			unsigned char max_dlugosc{};
@@ -55,8 +59,8 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 			}
 			else if (tokenIndex > 0)
 			{
-				for (int i = 0; i <= tokenIndex; i++)	//obsluguje tylko i=0 oraz i=1, wiec petla wydaje sie nie potrzebna,
-				{										// ale na wypadek gdybym w przyszlosci chcial oblugiwac wieksza 
+				for (int i = 0; i <= tokenIndex; i++)	//obsluguje tylko i=0 oraz i=1, wiec petla wydaje sie nie
+				{										//potrzebna, ale gdybym w przyszlosci chcial oblugiwac wieksza 
 					if (i<tokenIndex)					//glebokosc iteracji zostawiam to w formie petli
 						literalFlagUpdate(ofile, fullText, flagBajt, bit_count, cursor1,pos);
 					else if (i == tokenIndex && max_dlugosc < 3)
@@ -70,7 +74,7 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 		flagBajt |= 1;
 		bit_count++;
 		flagBajt <<= 8 - bit_count;
-		long long temp_pos;
+		unsigned long long temp_pos;
 		temp_pos = ofile.tellp();
 		ofile.seekp(pos);
 		ofile.put(flagBajt);
@@ -88,7 +92,7 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 
 void literalFlagUpdate
 (std::ofstream& ofile,const std::string& fullText,
-	unsigned char& flagBajt, int& bit_count, long long& cursor1, long long& pos)
+	unsigned char& flagBajt, int& bit_count, unsigned long long& cursor1, unsigned long long& pos)
 {
 	flagBajt <<= 1;
 	bit_count++;
@@ -98,7 +102,7 @@ void literalFlagUpdate
 
 void tokenFlagUpdate
 (std::ofstream& ofile, unsigned char& flagBajt, int& bit_count, int i,
-	const std::vector<Token>& tokenList, long long& cursor1, unsigned char max_dlugosc, long long& pos)
+	const std::vector<Token>& tokenList, unsigned long long& cursor1, unsigned char max_dlugosc, unsigned long long& pos)
 {
 	flagBajt <<= 1;
 	flagBajt |= 1;
@@ -109,7 +113,7 @@ void tokenFlagUpdate
 	flagSwap(ofile, pos, flagBajt, bit_count);
 }
 
-void flagSwap(std::ofstream& ofile, long long& pos, unsigned char& flagBajt, int& bit_count)
+void flagSwap(std::ofstream& ofile, unsigned long long& pos, unsigned char& flagBajt, int& bit_count)
 {
 	if (bit_count == 8)
 	{
@@ -122,38 +126,6 @@ void flagSwap(std::ofstream& ofile, long long& pos, unsigned char& flagBajt, int
 		bit_count = 0;
 		ofile.put(flagBajt);	//place holder
 	}
-}
-
-Token bestMatchFinder
-(long long cursor1, const std::string& fullText)
-{
-	unsigned short dystans{};
-	unsigned char dlugosc{};
-	int max{};
-	unsigned short window = std::numeric_limits<unsigned short>::max();
-
-	//petla for() z przesuwanym oknem
-	for (long long cursor2 = (cursor1 < window) ? 0 : cursor1 - window; cursor2 < cursor1; cursor2++)
-	{
-		unsigned short count{};
-		if (fullText[cursor2] == fullText[cursor1])
-		{
-			int temp_cursor1 = cursor1;
-			int temp_cursor2 = cursor2;
-			while (temp_cursor2 < cursor1 && fullText[temp_cursor1++] == fullText[temp_cursor2++])
-				count++;
-			if (count > max)
-			{
-				if (count > 255)
-					count = 255;
-				max = count;
-				dlugosc = max;
-				dystans = cursor1 - cursor2;
-			}
-		}
-	}
-	Token token(cursor1, dystans, dlugosc);
-	return token;
 }
 
 void AlgorytmDekodujacyLZ77(const std::string& ipath, const std::string& opath)
@@ -221,4 +193,81 @@ void AlgorytmDekodujacyLZ77(const std::string& ipath, const std::string& opath)
 	{
 		std::cout << "Blad odczytu pliku przy dekodowaniu" << std::endl;
 	}
+}
+
+unsigned short hashCalculation(const std::string& wyraz)
+{
+	unsigned short twoBajt{};
+	twoBajt |= wyraz[0];
+	twoBajt <<= 8;
+	unsigned short temp{};
+	temp |= wyraz[1];
+	twoBajt |= temp;
+	temp = 0;
+	temp |= wyraz[2];
+	temp <<= 4;
+	twoBajt |= temp;
+	return twoBajt;
+
+}
+
+Token bestHashFinder
+(long long cursor1, const std::string& fullText,
+	std::vector<unsigned long long>& head, std::vector<unsigned long long>& prev)
+{
+	unsigned short dystans{};
+	unsigned char dlugosc{};
+	int max{};
+	unsigned short window = std::numeric_limits<unsigned short>::max();
+
+	std::string temp{};
+	for (int i = 0; i < 3; i++)
+	{
+		temp.push_back(fullText[cursor1 + i]);
+	}
+	unsigned short hash = hashCalculation(temp);
+
+	if (head[hash] == -1)
+	{
+		head[hash] = cursor1;
+	}
+	else
+	{
+		prev[cursor1] = head[hash];
+		head[hash] = cursor1;
+		long long cursor2 = prev[cursor1];
+		while (cursor2 != -1 && cursor1 - cursor2 < window )
+		{
+			bool match = false;
+			for (int i = 0; i < 3; i++)
+			{
+				if (fullText[cursor2 + i] != fullText[cursor1 + i])
+				{
+					match = false;
+					break;
+				}
+				match = true;
+			}
+			if (match)
+			{
+				unsigned short count{};
+				long long temp_cursor1 = cursor1;
+				long long temp_cursor2 = cursor2;
+				while (temp_cursor2 < cursor1 && fullText[temp_cursor1++] == fullText[temp_cursor2++])
+					count++;
+				if (count > max)
+				{
+					if (count > 255)
+						count = 255;
+					max = count;
+					dlugosc = max;
+					dystans = cursor1 - cursor2;
+				}
+			}
+			cursor2 = prev[cursor2];
+		}
+	}
+	
+	Token token(dystans, dlugosc);
+	return token;
 }
