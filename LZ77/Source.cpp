@@ -15,20 +15,21 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 	std::ofstream ofile(opath, std::ios::binary);
 	if(ifile.good() && ofile.good())
 	{
-		auto size = ifile.tellg();
+		auto stream_size = ifile.tellg();
 		ifile.seekg(0);
-		fullText.resize(size);
-		ifile.read(&fullText[0], size);
+		fullText.resize(stream_size);
+		ifile.read(&fullText[0], stream_size);
 
+		long long size = (long long)stream_size;
 
-		std::vector<unsigned long long> head(std::numeric_limits<unsigned short>::max(), -1);
-		std::vector<unsigned long long> prev(size, -1);
+		std::vector<long long> head(std::numeric_limits<unsigned short>::max(), -1);
+		std::vector<long long> prev(size, -1);
 
-		unsigned long long pos = ofile.tellp();
+		long long pos = ofile.tellp();
 		unsigned char flagBajt{};
 		ofile.put(flagBajt);		//place holder
 		int bit_count{};
-		unsigned long long cursor1 = 0;
+		long long cursor1 = 0;
 
 		while(cursor1 < size)
 		{
@@ -37,7 +38,7 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 			{
 				if (cursor1 + i < size)
 				{
-				tokenList.push_back(bestHashFinder(cursor1  + i, fullText,head,prev));
+				tokenList.push_back(bestHashFinder(cursor1  + i, fullText,head,prev,size));
 				}
 			}
 			unsigned char max_dlugosc{};
@@ -92,7 +93,7 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 
 void literalFlagUpdate
 (std::ofstream& ofile,const std::string& fullText,
-	unsigned char& flagBajt, int& bit_count, unsigned long long& cursor1, unsigned long long& pos)
+	unsigned char& flagBajt, int& bit_count, long long& cursor1, long long& pos)
 {
 	flagBajt <<= 1;
 	bit_count++;
@@ -102,7 +103,7 @@ void literalFlagUpdate
 
 void tokenFlagUpdate
 (std::ofstream& ofile, unsigned char& flagBajt, int& bit_count, int i,
-	const std::vector<Token>& tokenList, unsigned long long& cursor1, unsigned char max_dlugosc, unsigned long long& pos)
+	const std::vector<Token>& tokenList, long long& cursor1, unsigned char max_dlugosc, long long& pos)
 {
 	flagBajt <<= 1;
 	flagBajt |= 1;
@@ -113,7 +114,7 @@ void tokenFlagUpdate
 	flagSwap(ofile, pos, flagBajt, bit_count);
 }
 
-void flagSwap(std::ofstream& ofile, unsigned long long& pos, unsigned char& flagBajt, int& bit_count)
+void flagSwap(std::ofstream& ofile, long long& pos, unsigned char& flagBajt, int& bit_count)
 {
 	if (bit_count == 8)
 	{
@@ -136,13 +137,14 @@ void AlgorytmDekodujacyLZ77(const std::string& ipath, const std::string& opath)
 	std::ofstream ofile(opath, std::ios::binary);
 	if(ifile.good() && ofile.good())
 	{
-		auto size = ifile.tellg();
+		auto stream_size = ifile.tellg();
 		ifile.seekg(0);
-		fullText.resize(size);
-		ifile.read(&fullText[0], size);
+		fullText.resize(stream_size);
+		ifile.read(&fullText[0], stream_size);
 
 		unsigned char flagBajt{};
 		int bit_count = 8;
+		long long size = (long long)stream_size;
 
 		std::string dekoded;
 		int cursor = 0;
@@ -195,76 +197,77 @@ void AlgorytmDekodujacyLZ77(const std::string& ipath, const std::string& opath)
 	}
 }
 
-unsigned short hashCalculation(const std::string& wyraz)
+unsigned short hashCalculation(const unsigned char c1, const unsigned char c2, const unsigned char c3)
 {
 	unsigned short twoBajt{};
-	twoBajt |= wyraz[0];
+	twoBajt |= c1;
 	twoBajt <<= 8;
 	unsigned short temp{};
-	temp |= wyraz[1];
+	temp |= c2;
 	twoBajt |= temp;
 	temp = 0;
-	temp |= wyraz[2];
+	temp |= c3;
 	temp <<= 4;
-	twoBajt |= temp;
+	twoBajt ^= temp;
 	return twoBajt;
 
 }
 
 Token bestHashFinder
 (long long cursor1, const std::string& fullText,
-	std::vector<unsigned long long>& head, std::vector<unsigned long long>& prev)
+	std::vector<long long>& head, std::vector<long long>& prev,const long long& size)
 {
 	unsigned short dystans{};
 	unsigned char dlugosc{};
 	int max{};
 	unsigned short window = std::numeric_limits<unsigned short>::max();
 
-	std::string temp{};
-	for (int i = 0; i < 3; i++)
+	if(cursor1 + 2 <= size)
 	{
-		temp.push_back(fullText[cursor1 + i]);
-	}
-	unsigned short hash = hashCalculation(temp);
+		unsigned short hash = hashCalculation(fullText[cursor1], fullText[cursor1 + 1], fullText[cursor1 + 2]);
 
-	if (head[hash] == -1)
-	{
-		head[hash] = cursor1;
-	}
-	else
-	{
-		prev[cursor1] = head[hash];
-		head[hash] = cursor1;
-		long long cursor2 = prev[cursor1];
-		while (cursor2 != -1 && cursor1 - cursor2 < window )
+		if (head[hash] == -1)
 		{
-			bool match = false;
-			for (int i = 0; i < 3; i++)
+			head[hash] = cursor1;
+		}
+		else
+		{
+			prev[cursor1] = head[hash];
+			head[hash] = cursor1;
+			long long cursor2 = prev[cursor1];
+			while (cursor2 != -1 && cursor1 - cursor2 < window)
 			{
-				if (fullText[cursor2 + i] != fullText[cursor1 + i])
+				bool match = false;
+				for (int i = 0; i < 3; i++)
 				{
-					match = false;
-					break;
+					if (cursor1 + i <= size)
+					{
+						if (fullText[cursor2 + i] != fullText[cursor1 + i])
+						{
+							match = false;
+							break;
+						}
+						match = true;
+					}
 				}
-				match = true;
-			}
-			if (match)
-			{
-				unsigned short count{};
-				long long temp_cursor1 = cursor1;
-				long long temp_cursor2 = cursor2;
-				while (temp_cursor2 < cursor1 && fullText[temp_cursor1++] == fullText[temp_cursor2++])
-					count++;
-				if (count > max)
+				if (match)
 				{
-					if (count > 255)
-						count = 255;
-					max = count;
-					dlugosc = max;
-					dystans = cursor1 - cursor2;
+					unsigned short count{};
+					long long temp_cursor1 = cursor1;
+					long long temp_cursor2 = cursor2;
+					while (fullText[temp_cursor1++] == fullText[temp_cursor2++])
+						count++;
+					if (count > max)
+					{
+						if (count > 255)
+							count = 255;
+						max = count;
+						dlugosc = max;
+						dystans = cursor1 - cursor2;
+					}
 				}
+				cursor2 = prev[cursor2];
 			}
-			cursor2 = prev[cursor2];
 		}
 	}
 	
