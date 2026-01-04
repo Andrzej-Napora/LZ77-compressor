@@ -62,7 +62,7 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 			}
 
 			std::vector<Token> tokenList;
-			for (int i = 0; i <2; i++)		//szukanie najlepszego dopasowania 2-znaki do przodu
+			for (int i = 0; i <1; i++)		//szukanie najlepszego dopasowania 2-znaki do przodu
 			{
 				if (cursor1 + i < fullText.size())
 				{
@@ -84,13 +84,19 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 				if (max_dlugosc < 3)
 				{
 					headPrevUpdate(cursor1, fullText, head, prev);
-					literalFlagUpdate(ofile, fullText, flagBajt, bit_count, cursor1, pos, file_cursor);
+					literalFlagUpdate(ofile, flagBajt, bit_count, fullText[cursor1]);
+					flagSwap(ofile, pos, flagBajt, bit_count);
+					cursor1++;
+					file_cursor++;
 				}
 				else if (max_dlugosc >= 3)
 				{
 					for(int i=0;i<max_dlugosc;i++)
 						headPrevUpdate(cursor1+i, fullText, head, prev);
-					tokenFlagUpdate(ofile, flagBajt, bit_count, tokenIndex, tokenList, cursor1, max_dlugosc, pos, file_cursor);
+					tokenFlagUpdate(ofile, flagBajt, bit_count, tokenIndex, tokenList, max_dlugosc);
+					flagSwap(ofile, pos, flagBajt, bit_count);
+					cursor1 += max_dlugosc;
+					file_cursor += max_dlugosc;
 				}
 			}
 			else if (tokenIndex > 0)
@@ -100,18 +106,27 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 					if (i<tokenIndex)					//glebokosc iteracji zostawiam to w formie petli
 					{
 						headPrevUpdate(cursor1, fullText, head, prev);
-						literalFlagUpdate(ofile, fullText, flagBajt, bit_count, cursor1, pos, file_cursor);
+						literalFlagUpdate(ofile, flagBajt, bit_count, fullText[cursor1]);
+						flagSwap(ofile, pos, flagBajt, bit_count);
+						cursor1++;
+						file_cursor++;
 					}
 					else if (i == tokenIndex && max_dlugosc < 3)
 					{
 						headPrevUpdate(cursor1, fullText, head, prev);
-						literalFlagUpdate(ofile, fullText, flagBajt, bit_count, cursor1, pos, file_cursor);
+						literalFlagUpdate(ofile, flagBajt, bit_count, fullText[cursor1]);
+						flagSwap(ofile, pos, flagBajt, bit_count);
+						cursor1++;
+						file_cursor++;
 					}
 					else if (i == tokenIndex && max_dlugosc >= 3)
 					{
 						for (int i = 0; i < max_dlugosc; i++)
 							headPrevUpdate(cursor1 + i, fullText, head, prev);
-						tokenFlagUpdate(ofile, flagBajt, bit_count, tokenIndex, tokenList, cursor1, max_dlugosc, pos, file_cursor);
+						tokenFlagUpdate(ofile, flagBajt, bit_count, tokenIndex, tokenList, max_dlugosc);
+						flagSwap(ofile, pos, flagBajt, bit_count);
+						cursor1 += max_dlugosc;
+						file_cursor += max_dlugosc;
 					}
 				}
 			}
@@ -165,14 +180,8 @@ Token hashSearch
 	if (cursor1 + 2 <= fullText.size())
 	{
 		unsigned short hash = hashCalculation(fullText[cursor1], fullText[cursor1 + 1], fullText[cursor1 + 2]);
-
-		if (head[hash] == -1)
-			head[hash] = cursor1;
-		else if(head[hash] != cursor1)		//warunek potrzebny dla "lazy matching"
 		{
-			prev[cursor1] = head[hash];
-			head[hash] = cursor1;
-			long long cursor2 = prev[cursor1];
+			long long cursor2 = head[hash];
 			int steps = 256;
 			while (cursor2 != -1 && cursor1 - cursor2 < window && steps-- > 0)
 			{
@@ -216,25 +225,11 @@ Token hashSearch
 void prevSwap(std::vector<long long>& prev)
 {
 	unsigned short twoBajt = std::numeric_limits<unsigned short>::max();
-	/*for (int i=0;i<twoBajt;i++)
+	for (int i=0;i<twoBajt;i++)
 	{
 		prev[i] = prev[twoBajt + i];
 		if(prev[i]!=-1)
 			prev[i] -= twoBajt;
-		prev[twoBajt + i] = -1;
-	}*/
-	for (int i = 0; i < twoBajt; i++)
-	{
-		long long val = prev[twoBajt + i];
-
-		if (val != -1)
-		{
-			val -= twoBajt;
-			if (val < 0) val = -1;
-		}
-
-		prev[i] = val;
-
 		prev[twoBajt + i] = -1;
 	}
 }
@@ -242,7 +237,7 @@ void prevSwap(std::vector<long long>& prev)
 void headSwap(std::vector<long long>& head)
 {
 	unsigned short twoBajt = std::numeric_limits<unsigned short>::max();
-	/*for (int i = 0; i < twoBajt; i++)
+	for (int i = 0; i < twoBajt; i++)
 	{
 		if (head[i] != -1)
 		{
@@ -250,42 +245,26 @@ void headSwap(std::vector<long long>& head)
 			if (head[i] < 0)
 				head[i] = -1;
 		}
-
-	}*/
-	for (size_t i = 0; i < head.size(); i++)
-	{
-		if (head[i] != -1)
-		{
-			head[i] -= twoBajt;
-
-			if (head[i] < 0) head[i] = -1;
-		}
 	}
 }
 
 void literalFlagUpdate
-(std::ofstream& ofile,const std::string& fullText,
-	unsigned char& flagBajt, int& bit_count, long long& cursor1, long long& pos, long long& file_cursor)
+(std::ofstream& ofile,unsigned char& flagBajt, int& bit_count, char sign)
 {
 	flagBajt <<= 1;
 	bit_count++;
-	ofile.put(fullText[cursor1++]);
-	file_cursor++;
-	flagSwap(ofile, pos, flagBajt, bit_count);
+	ofile.put(sign);
 }
 
 void tokenFlagUpdate
 (std::ofstream& ofile, unsigned char& flagBajt, int& bit_count, int i,
-	const std::vector<Token>& tokenList, long long& cursor1, unsigned char max_dlugosc, long long& pos, long long& file_cursor)
+	const std::vector<Token>& tokenList, unsigned char max_dlugosc)
 {
 	flagBajt <<= 1;
 	flagBajt |= 1;
 	bit_count++;
-	cursor1 += max_dlugosc;
-	file_cursor += max_dlugosc;
 	ofile.write(reinterpret_cast<const char*>(&tokenList[i].dystans), sizeof(tokenList[i].dystans));
 	ofile.write(reinterpret_cast<const char*>(&tokenList[i].dlugosc), sizeof(tokenList[i].dlugosc));
-	flagSwap(ofile, pos, flagBajt, bit_count);
 }
 
 void flagSwap(std::ofstream& ofile, long long& pos, unsigned char& flagBajt, int& bit_count)
