@@ -33,3 +33,6 @@ void prevSwap(std::vector<long long>& prev);
 void headSwap(std::vector<long long>& head);
 void headPrevUpdate(long long cursor1, const std::string& fullText,
 	std::vector<long long>& head, std::vector<long long>& prev);
+void readSwap(int& cursor, const unsigned short twoBajt, const long long& file_cursor, std::string& fullText,
+	const long long& size, std::ifstream& ifile);
+void dekodedSwap(std::string& dekoded, const unsigned short twoBajt, bool& first, std::ofstream& ofile);

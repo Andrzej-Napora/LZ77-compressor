@@ -9,7 +9,7 @@ using namespace std;
 
 int main()
 {
-	string ipath = "../resources/city_day.csv";
+	string ipath = "../resources/TesktLiteracki.txt";
 	string binOpath = "../resources/Binary.txt";
 	string binIpath = "../resources/test.txt";
 

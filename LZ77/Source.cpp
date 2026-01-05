@@ -50,7 +50,7 @@ void AlgorytmKodujacyLZ77(const std::string& ipath, const std::string& opath)
 				}
 				if (file_cursor + twoBajt >= size)
 				{
-					unsigned short lastBytes = size - file_cursor;
+					unsigned short lastBytes = static_cast<unsigned short>(size - file_cursor);
 					fullText.resize(twoBajt + lastBytes);
 					ifile.read(&fullText[twoBajt], lastBytes);
 				}
@@ -302,60 +302,87 @@ void AlgorytmDekodujacyLZ77(const std::string& ipath, const std::string& opath)
 {
 	std::string fullText;
 
-	std::ifstream ifile(ipath, std::ios::binary | std::ios::ate);
+	std::ifstream ifile(ipath, std::ios::binary | std::ios::ate);	//otwieram plik na koncu, zeby szybko sprawdzic jego rozmiar
 	std::ofstream ofile(opath, std::ios::binary);
 	if(ifile.good() && ofile.good())
 	{
 		auto stream_size = ifile.tellg();
-		ifile.seekg(0);
-		fullText.resize(stream_size);
-		ifile.read(&fullText[0], stream_size);
+		ifile.seekg(0);					//przechodze na poczatek pliku
+		long long size = (long long)stream_size;
+		unsigned short twoBajt = std::numeric_limits<unsigned short>::max();//ustalam zakres mojego przesuwanego okna,
+																			//bedzie wynosilo 2*twoBajt
+		if(size> twoBajt)
+		{
+			fullText.resize(2*twoBajt);
+			ifile.read(&fullText[0], 2*twoBajt);
+		}
+		else
+		{
+			fullText.resize(size);
+			ifile.read(&fullText[0], size);
+		}
 
 		unsigned char flagBajt{};
 		int bit_count = 8;
-		long long size = (long long)stream_size;
 
-		std::string dekoded;
-		int cursor = 0;
-		while(cursor < size)
-		{
-			if (bit_count == 8)
+		int cursor{};			//cursor sluzy do poruszania sie w przesuwanym oknie, 
+		long long file_cursor{};//file_cursor bedzie sluzyc do poruszania sie w pliku, na orginalnych danych
+		std::string dekoded;	//buffor, do ktorego zapisuje dane, zanim zapisze je do pliku, plus  w nim bede sledzil historie
+		bool first = true;		//flaga pierwszego przesuniecia okna
+
+		while(file_cursor < size)
+		{		
+			if (bit_count == 8)	//pobranie nowej flagi bitowej, po wyczerpaniu poprzedniej
 			{
 				bit_count = 0;
 				flagBajt = fullText[cursor];
 				cursor++;
+				readSwap(cursor, twoBajt, file_cursor, fullText, size, ifile);//funkcja wywolywana po kazdej aktualizacji cursor,
+				file_cursor++;												//sprawdzajaca czy cursor nie wyszedl poza zakres
 			}
-			bool bit = (flagBajt & 128)!=0;
+			bool bit = (flagBajt & 128)!=0;	//wyciagniecie flagi bitowej z flagBajt
 			flagBajt <<= 1;
 			bit_count++;
-			if (bit == 0)
+			if (bit == 0)	//flaga 0 oznacza literal; obsluga literalu
 			{
 				dekoded.push_back(fullText[cursor]);
-				ofile.put(fullText[cursor]);
-				cursor+=sizeof(unsigned char);
+				dekodedSwap(dekoded, twoBajt, first, ofile);//sprawdzam, czy dekoded nie wyszedl poza zakres
+				cursor += sizeof(unsigned char);
+				readSwap(cursor, twoBajt, file_cursor, fullText, size, ifile);
+				file_cursor += sizeof(unsigned char);
 				continue;
 			}
-			else if (bit == 1)
+			else if (bit == 1)	//flaga 1 oznacza pare dystans,dlugosc
 			{
-				unsigned short dystans = *reinterpret_cast<const unsigned short*>(&fullText[cursor]);
-				cursor += sizeof(unsigned short);
-				unsigned char dlugosc = *reinterpret_cast<const unsigned char*>(&fullText[cursor]);
-				cursor += sizeof(unsigned char);
+				unsigned short dystans = *reinterpret_cast<const unsigned short*>(&fullText[cursor]);//wyluskanie dwoch bajtow informacji bezposrednio ze stringa
+				cursor+=sizeof(unsigned short);
+				readSwap(cursor, twoBajt, file_cursor, fullText, size, ifile);
+				file_cursor += sizeof(unsigned short);
+				unsigned char dlugosc = *reinterpret_cast<const unsigned char*>(&fullText[cursor]);//jak wyzej
+				cursor++;
+				readSwap(cursor, twoBajt, file_cursor, fullText, size, ifile);
+				file_cursor += sizeof(unsigned char);
 
 				if (dystans == 0 && dlugosc == 0)		//warunek zakonczenia programu
+				{
+					if(!first)								//wczytanie reszty danych w dwoch wariantach, gdy jestesmy przed przesunieciem
+						ofile.write(&dekoded[twoBajt], dekoded.size() - twoBajt);	//okna, albo juz po pierwszym przesunieciu
+					else
+						ofile.write(&dekoded[0], dekoded.size());
 					break;
+				}
 
-				if (dystans > dekoded.size())
+				if (dystans > dekoded.size())	//sprawdzenie poprawnosci danych
 				{
 					std::cout << "Blad odczytu danych" << std::endl;
 					return;
 				}
-				int index = dekoded.size() - dystans;
-				for (int i = 0; i < dlugosc; i++)
+				int index = dekoded.size() - dystans;	//wprowadzam dane do dekoded, liczone od konca dekoded przez cala "dlugosc",
+				for (int i = 0; i < dlugosc; i++)		//dane pobieram z samego dekoded
 				{
-					dekoded.push_back(dekoded[index+i]);
+					dekoded.push_back(dekoded[index + i]);
 				}
-				ofile.write(&dekoded[dekoded.size() - dlugosc], dlugosc);
+				dekodedSwap(dekoded, twoBajt, first, ofile);//sprawdzam, czy dekoded nie wyszedl poza zakres
 				continue;
 			}
 		}
@@ -363,5 +390,52 @@ void AlgorytmDekodujacyLZ77(const std::string& ipath, const std::string& opath)
 	else
 	{
 		std::cout << "Blad odczytu pliku przy dekodowaniu" << std::endl;
+	}
+}
+
+//funkcja sluzaca do przesuniecia okna wczytanych danych, wywolywana przy kazdej aktualizacji cursor++
+void readSwap(int& cursor, const unsigned short twoBajt,const long long& file_cursor, std::string& fullText,
+	const long long& size, std::ifstream& ifile)
+{
+	const char safe_margin = 64;				//potrzebuje margines bledu, zeby nie przeciac informacji w polowie
+	if (cursor + safe_margin >= 2 * twoBajt)
+	{
+		int rounded_margin = 2 * twoBajt - cursor;//margines bledu musi zaczac sie od pozycji kursora, a nie pozycji wyznaczonej 
+		if (size - file_cursor >= 2 * twoBajt)	  //arbitralnie, w przeciwnym razie znowu moge otrzymac przeciete informacje
+		{
+			for (int i = 0; i < rounded_margin; i++)
+				fullText[i] = fullText[fullText.size() - rounded_margin + i];//przenosze informacje z marginesu do poczatku nowego stringa
+			fullText.resize(2 * twoBajt);
+			ifile.read(&fullText[rounded_margin], 2 * twoBajt- rounded_margin);
+			cursor = 0;
+		}
+		else
+		{
+			unsigned short lastBytes = static_cast<unsigned short>(size - file_cursor);//sytuacja, w ktorej do konca pliku zostalo mniej
+			for (int i = 0; i < rounded_margin; i++)									//informacji niz twoBajt
+				fullText[i] = fullText[fullText.size() - rounded_margin + i];
+			fullText.resize(lastBytes);
+			ifile.read(&fullText[rounded_margin], lastBytes- rounded_margin);
+			cursor = 0;
+		}
+	}
+}
+
+//funkcja przesuwajaca i zapisujaca wczytane dane
+void dekodedSwap(std::string& dekoded,const unsigned short twoBajt, bool& first, std::ofstream& ofile)
+{
+	if (dekoded.size() > 2 * twoBajt)
+	{
+		int size = dekoded.size();
+		if (first)								//Obsluga pierwszego przejscia przez warunek glowny
+		{
+			first = false;
+			ofile.write(&dekoded[0], size);
+		}
+		else
+			ofile.write(&dekoded[twoBajt], size-twoBajt);	//zapisuje wszystko od polowy do konca
+		for (int i = 0; i < twoBajt; i++)
+			dekoded[i] = dekoded[size - twoBajt + i];		//przenosze wszystko, od polowy do konca, na poczatek
+		dekoded.resize(twoBajt);
 	}
 }
