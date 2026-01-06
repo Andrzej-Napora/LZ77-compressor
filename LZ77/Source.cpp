@@ -354,11 +354,12 @@ void AlgorytmDekodujacyLZ77(const std::string& ipath, const std::string& opath)
 			}
 			else if (bit == 1)	//flaga 1 oznacza pare dystans,dlugosc
 			{
-				unsigned short dystans = *reinterpret_cast<const unsigned short*>(&fullText[cursor]);//wyluskanie dwoch bajtow informacji bezposrednio ze stringa
-				cursor+=sizeof(unsigned short);
+				unsigned short dystans{};
+				std::memcpy(&dystans, &fullText[cursor], sizeof(unsigned short));//wyluskanie dwoch bajtow informacji 
+				cursor+=sizeof(unsigned short);									 //bezposrednio ze stringa
 				readSwap(cursor, twoBajt, file_cursor, fullText, size, ifile);
 				file_cursor += sizeof(unsigned short);
-				unsigned char dlugosc = *reinterpret_cast<const unsigned char*>(&fullText[cursor]);//jak wyzej
+				unsigned char dlugosc = fullText[cursor];
 				cursor++;
 				readSwap(cursor, twoBajt, file_cursor, fullText, size, ifile);
 				file_cursor += sizeof(unsigned char);
